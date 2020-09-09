@@ -1,0 +1,194 @@
+
+/***********************************************************************************************************
+                                        Database scripts                                        
+************************************************************************************************************/
+
+create user ers;
+
+GRANT CREATE ON SCHEMA ers TO ers;
+GRANT USAGE ON SCHEMA ers TO ers;
+
+/**************************************************************************************************************
+                                    CREATE THE TABLES 
+**************************************************************************************************************/
+
+
+
+create table ers_reimbursement 
+(
+  reimb_id serial primary key,
+  reimb_amount numeric(10,2) not null,
+  reimb_submitted timestamp not null,
+  reimb_resolved timestamp,
+  reimb_description varchar(250),
+  reimb_receipt bytea,
+  reimb_author int4 not null,
+  reimb_resolver int4,
+  reimb_status_id int4 not null,
+  reimb_type_id int4 not NULL
+);
+
+create table ers_users (
+    ers_users_id serial primary key,
+    ers_username varchar(50) not null unique,
+    ers_password varchar(50) not null,
+    user_first_name varchar(100) not null,
+    user_last_name varchar(100) not null,
+    user_email varchar(150) not null unique,
+    user_role_id int4 not null
+);
+
+create table ers_reimbursement_status (
+    reimb_status_id serial primary key,
+    reimb_status varchar(10) not null
+);
+
+create table ers_reimbursement_type (
+    reimb_type_id serial primary key,
+    reimb_type varchar(10) not null
+);
+
+create table ers_user_roles (
+    ers_user_role_id serial primary key,
+    user_role varchar(10) not null
+);
+
+/********************************************************************************************
+                                    CREATE FOREIGN KEYS
+*********************************************************************************************/
+
+ALTER TABLE ers_reimbursement ADD CONSTRAINT ers_users_fk_auth
+    FOREIGN KEY (reimb_author) REFERENCES ers_users (ers_users_id);
+    
+ALTER TABLE ers_reimbursement ADD CONSTRAINT ers_users_fk_reslvr
+    FOREIGN KEY (reimb_resolver) REFERENCES ers_users (ers_users_id);
+    
+ALTER TABLE ers_reimbursement ADD CONSTRAINT ers_reimbursement_status_fk
+    FOREIGN KEY (reimb_status_id) REFERENCES ers_reimbursement_status (reimb_status_id);
+    
+ALTER TABLE ers_reimbursement ADD CONSTRAINT ers_reimbursement_type_fk
+    FOREIGN KEY (reimb_type_id) REFERENCES ers_reimbursement_type (reimb_type_id);
+    
+ALTER TABLE ers_users ADD CONSTRAINT user_roles_fk
+    FOREIGN KEY (user_role_id) REFERENCES ers_user_roles (ers_user_role_id);
+   
+/**********************************************************************************************
+                                        SEQUENCES
+***********************************************************************************************/
+   
+   CREATE SEQUENCE reimb_seq;
+CREATE SEQUENCE user_seq;
+
+
+/**********************************************************************************************
+                                        TRIGGERS - but not used
+***********************************************************************************************/ 
+   
+       
+     CREATE FUNCTION reimb_seq_for_ers() RETURNS TRIGGER AS $$
+BEGIN
+	IF    TG_OP = 'INSERT' THEN
+	               DECLARE
+	        sql varchar := 'CREATE SEQUENCE seq_reimb_for_ers_' || NEW.reimb_id;
+	    	BEGIN
+	        	EXECUTE sql;
+	        	return NEW;
+	       	END;
+	 ELSIF TG_OP = 'UPDATE' THEN
+	               DECLARE
+	        sql varchar := 'ALTER SEQUENCE seq_reimb_for_ers_' || OLD.reimb_id;
+	    BEGIN
+	        EXECUTE sql;
+	        return NEW;
+	       END;
+	      
+	END IF;
+END;
+	  $$ LANGUAGE plpgsql;
+	 
+/* update sequence on insert of new reimbursement */
+CREATE trigger reimb_id_trig
+before INSERT OR UPDATE on ers_reimbursement
+for each row
+            EXECUTE PROCEDURE reimb_seq_for_ers();
+           
+           
+/* update sequence on insert of new user */
+           
+     CREATE OR REPLACE FUNCTION reimb_seq_for_ers_users() RETURNS TRIGGER AS $$
+BEGIN
+	IF    TG_OP = 'INSERT' THEN
+	               DECLARE
+	        sql varchar := 'CREATE SEQUENCE seq_reimb_for_ers_users_' || NEW.ers_users_id;
+	    	BEGIN
+	        	EXECUTE sql;
+	        	return NEW;
+	       	END;
+	 ELSIF TG_OP = 'UPDATE' THEN
+	               DECLARE
+	        sql varchar := 'ALTER SEQUENCE seq_reimb_for_ers_users_' || OLD.ers_users_id;
+	    BEGIN
+	        EXECUTE sql;
+	        return NEW;
+	       END;
+	      
+	END IF;
+END;
+	  $$ LANGUAGE plpgsql;
+           
+           
+/* update sequence on insert of new user */
+create trigger user_id_trig
+before insert or update on ers_users
+for each row
+            EXECUTE PROCEDURE reimb_seq_for_ers_users();
+           
+/*********************************************************************************************
+                            INITIALIZE DATABASE VALUES
+**********************************************************************************************/
+	 
+/* reimbursement status codes */
+INSERT INTO ers_reimbursement_status (reimb_status_id, reimb_status)
+VALUES (1, 'Pending');
+
+INSERT INTO ers_reimbursement_status (reimb_status_id, reimb_status)
+VALUES (2, 'Approved');
+INSERT INTO ers_reimbursement_status (reimb_status_id, reimb_status)
+VALUES (3, 'Denied');
+
+/* reimbursement type codes */
+INSERT INTO ers_reimbursement_type (reimb_type_id, reimb_type)
+VALUES (1, 'Lodging');
+INSERT INTO ers_reimbursement_type (reimb_type_id, reimb_type)
+VALUES (2, 'Travel');
+INSERT INTO ers_reimbursement_type (reimb_type_id, reimb_type)
+VALUES (3, 'Food');
+INSERT INTO ers_reimbursement_type (reimb_type_id, reimb_type)
+VALUES (4, 'Other');
+
+/* ers user roles */
+INSERT INTO ers_user_roles (ers_user_role_id, user_role)
+VALUES (1, 'Employee');
+INSERT INTO ers_user_roles (ers_user_role_id, user_role)
+VALUES (2, 'Manager');
+
+/* insert primary user */
+INSERT INTO ers_users (ers_username, ers_password, user_first_name, user_last_name, user_email, user_role_id)
+VALUES ( 'pudayaku2', 'password1', 'Jane', 'Paydon', 'jpadon@gmail.com', 1);
+
+SELECT currval('ers.ers_users_ers_users_id_seq') ;
+
+/* insert into ers_reimbursement */
+INSERT INTO ers.ers_reimbursement
+(reimb_amount, reimb_submitted, reimb_resolved, reimb_description, reimb_receipt, reimb_author, reimb_resolver, reimb_status_id, reimb_type_id)
+VALUES(100.50, '9/6/2020', '9/6/2020', 'Test Reimbursement', 'Test', 1, 1, 2, 2);
+	 
+SELECT * FROM ers.ers_users WHERE ers_username = 'pranavuday' AND ers_password = 'password'
+
+
+
+       
+
+    
+
+
