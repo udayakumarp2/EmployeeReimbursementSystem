@@ -15,7 +15,8 @@ public class UserService {
 	// logs a user into the system
 	public User login(User u) {
 		boolean loginApproved = false;
-		String hashedPassword, password; 
+		String hashedPassword, password;
+		
 		while (loginApproved == false) {
 			 hashedPassword = u.getHashedPassword(); 
 			 password = u.getPassword();
